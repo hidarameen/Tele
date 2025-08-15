@@ -13,4 +13,3 @@ cryptography>=42.0
 apscheduler>=3.10
 tzdata>=2024.1
 Babel>=2.14
-psycopg2
