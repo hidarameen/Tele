@@ -28,10 +28,14 @@ class MadeBotRunner:
 		self.dp.include_router(build_router(self.bot_id))
 		self.dp.message.register(self._on_message)
 		logger.info(f"Starting made bot {bm.name} ({self.bot_id})")
-		await self.dp.start_polling(self.bot, allowed_updates=self.dp.resolve_used_update_types())
+		try:
+			await self.dp.start_polling(self.bot, allowed_updates=self.dp.resolve_used_update_types())
+		except asyncio.CancelledError:
+			logger.info(f"Polling cancelled for made bot {self.bot_id}")
+			raise
 
 	async def _on_message(self, message: Message):
-		if message.chat.type == "private":
+		if message.chat.type == "private" or (message.text and message.text.startswith("/")):
 			return
 		source_chat_id = message.chat.id
 		async with AsyncSessionFactory() as session:

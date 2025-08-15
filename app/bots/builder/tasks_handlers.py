@@ -35,7 +35,9 @@ async def on_task_item(call: CallbackQuery):
 	builder = InlineKeyboardBuilder()
 	builder.button(text="تعطيل/تنشيط", callback_data=f"task_toggle:{task_id}")
 	builder.button(text="حذف", callback_data=f"task_delete:{task_id}")
-	builder.adjust(2)
+	builder.button(text="ℹ️ معلومات", callback_data=f"task_info:{task_id}")
+	builder.button(text="⚙️ إعدادات", callback_data=f"task_settings:{task_id}")
+	builder.adjust(2,2)
 	await call.message.answer("إدارة المهمة:", reply_markup=builder.as_markup())
 	await call.answer()
 
@@ -62,3 +64,22 @@ async def on_task_delete(call: CallbackQuery):
 		await call.answer("تم الحذف")
 	else:
 		await call.answer("غير موجود", show_alert=True)
+
+@router.callback_query(F.data.startswith("task_info:"))
+async def on_task_info(call: CallbackQuery):
+	task_id = int(call.data.split(":", 1)[1])
+	async with AsyncSessionFactory() as session:
+		res = await session.execute(select(Task).where(Task.id == task_id))
+		t = res.scalar_one_or_none()
+	if not t:
+		await call.answer("غير موجود", show_alert=True)
+		return
+	text = f"اسم المهمة: {t.name}\nالنوع: {t.task_type}\nالحالة: {'مفعلة' if t.is_active else 'معطلة'}"
+	await call.message.answer(text)
+	await call.answer()
+
+@router.callback_query(F.data.startswith("task_settings:"))
+async def on_task_settings(call: CallbackQuery):
+	# سيتم تكميله لاحقاً عند استلام المواصفات
+	await call.message.answer("إعدادات المهمة: سيتم إضافتها لاحقاً")
+	await call.answer()

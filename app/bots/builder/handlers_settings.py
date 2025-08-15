@@ -31,6 +31,7 @@ async def on_userbot_settings(call: CallbackQuery):
 	for s in sessions:
 		label = s.label or f"جلسة #{s.id}"
 		builder.button(text=label, callback_data=f"userbot_s:{s.id}")
+		builder.button(text="🚪 تسجيل الخروج", callback_data=f"userbot_logout:{s.id}")
 	builder.adjust(1)
 	await call.message.answer("جلسات اليوزربوت:", reply_markup=builder.as_markup())
 	await call.answer()
@@ -40,9 +41,23 @@ async def on_userbot_item(call: CallbackQuery):
 	session_id = int(call.data.split(":",1)[1])
 	builder = InlineKeyboardBuilder()
 	builder.button(text="🗑 حذف الجلسة", callback_data=f"userbot_del:{session_id}")
+	builder.button(text="🚪 تسجيل الخروج", callback_data=f"userbot_logout:{session_id}")
 	builder.adjust(1)
 	await call.message.answer("إدارة الجلسة:", reply_markup=builder.as_markup())
 	await call.answer()
+
+@router.callback_query(F.data.startswith("userbot_logout:"))
+async def on_userbot_logout(call: CallbackQuery):
+	session_id = int(call.data.split(":",1)[1])
+	# حذف الجلسة هو بمثابة تسجيل خروج بالنسبة لنا
+	async with AsyncSessionFactory() as session:
+		user = await get_or_create_user(session, call.from_user.id)
+		ok = await delete_user_session(session, user, session_id)
+		await session.commit()
+	if ok:
+		await call.answer("تم تسجيل الخروج")
+	else:
+		await call.answer("غير موجود", show_alert=True)
 
 @router.callback_query(F.data.startswith("userbot_del:"))
 async def on_userbot_delete(call: CallbackQuery):
