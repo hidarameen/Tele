@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engin
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.engine.url import make_url, URL
 from app.config import settings
+from app.utils.logger import logger
 
 class Base(DeclarativeBase):
 	pass
@@ -38,16 +39,22 @@ def _build_url_from_params() -> str | None:
 	))
 
 
+_db_source: str = ""
+
+
 def _normalize_database_url_and_args(url_str: str | None) -> tuple[str, dict]:
+	global _db_source
 	ssl_required = None
 	if not url_str:
 		built = _build_url_from_params()
 		if not built:
 			raise RuntimeError("DATABASE_URL or DB_*-params are required")
 		url = make_url(built)
+		_db_source = "DB_*"
 	else:
 		raw = _clean(url_str)
 		url = make_url(raw)
+		_db_source = "DATABASE_URL"
 	# Force asyncpg driver if a sync or bare driver is provided
 	if url.drivername in ("postgresql", "postgres", "postgresql+psycopg2", "postgresql+pg8000"):
 		url = url.set(drivername="postgresql+asyncpg")
@@ -79,6 +86,8 @@ def _normalize_database_url_and_args(url_str: str | None) -> tuple[str, dict]:
 					ssl_required = False
 		# Drop all query params for asyncpg compatibility
 		url = url.set(query={})
+	# Log connection summary without secrets
+	logger.info(f"DB connect -> source={_db_source} driver={url.drivername} host={url.host} port={url.port} db={url.database} user={url.username} ssl={ssl_required}")
 	return str(url), ({"ssl": ssl_required} if ssl_required is not None else {})
 
 _normalized_url, _connect_args = _normalize_database_url_and_args(settings.database_url)
