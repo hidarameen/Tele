@@ -7,17 +7,34 @@ class Base(DeclarativeBase):
 	pass
 
 
-def _build_url_from_params() -> str | None:
-	if not all([settings.db_host, settings.db_name, settings.db_user, settings.db_password]):
+def _clean(val):
+	if val is None:
 		return None
-	port = settings.db_port or 5432
+	s = str(val).strip()
+	if (s.startswith("'") and s.endswith("'")) or (s.startswith('"') and s.endswith('"')):
+		s = s[1:-1]
+	return s
+
+
+def _build_url_from_params() -> str | None:
+	host = _clean(settings.db_host)
+	name = _clean(settings.db_name)
+	user = _clean(settings.db_user)
+	password = _clean(settings.db_password)
+	if not all([host, name, user, password]):
+		return None
+	port_raw = settings.db_port if settings.db_port is not None else 5432
+	try:
+		port = int(str(port_raw).strip())
+	except Exception:
+		port = 5432
 	return str(URL.create(
 		drivername="postgresql+asyncpg",
-		host=settings.db_host,
+		host=host,
 		port=port,
-		database=settings.db_name,
-		username=settings.db_user,
-		password=settings.db_password,
+		database=name,
+		username=user,
+		password=password,
 	))
 
 
@@ -29,15 +46,17 @@ def _normalize_database_url_and_args(url_str: str | None) -> tuple[str, dict]:
 			raise RuntimeError("DATABASE_URL or DB_*-params are required")
 		url = make_url(built)
 	else:
-		url = make_url(url_str)
+		raw = _clean(url_str)
+		url = make_url(raw)
 	# Force asyncpg driver if a sync or bare driver is provided
 	if url.drivername in ("postgresql", "postgres", "postgresql+psycopg2", "postgresql+pg8000"):
 		url = url.set(drivername="postgresql+asyncpg")
 	if url.drivername.startswith("postgresql"):
 		query = dict(url.query)
 		# SSL from DB_SSLMODE param if present
-		if settings.db_sslmode:
-			val = settings.db_sslmode.strip().lower()
+		sslmode_env = _clean(settings.db_sslmode)
+		if sslmode_env:
+			val = sslmode_env.lower()
 			if val in ("require", "verify-ca", "verify-full"):
 				ssl_required = True
 			elif val == "disable":
