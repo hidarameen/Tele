@@ -2,12 +2,21 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engin
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.engine.url import make_url
 from app.config import settings
+import re
 
 class Base(DeclarativeBase):
 	pass
 
-def _normalize_database_url(url_str: str) -> str:
-	url = make_url(url_str)
+def _strip_sslmode_raw(url_str: str) -> str:
+	# Aggressively remove any sslmode=... from the raw string to avoid asyncpg parsing it
+	return re.sub(r"([?&])sslmode=[^&]*(&|$)", lambda m: m.group(1) if m.group(2) == "" else m.group(1), url_str)
+
+
+def _normalize_database_url_and_args(url_str: str) -> tuple[str, dict]:
+	ssl_required = None
+	# First pass: raw strip
+	raw = _strip_sslmode_raw(url_str)
+	url = make_url(raw)
 	if url.drivername.startswith("postgresql"):
 		query = dict(url.query)
 		sslmode_raw = query.pop("sslmode", None)
@@ -21,14 +30,15 @@ def _normalize_database_url(url_str: str) -> str:
 			}
 			value_norm = synonyms.get(value, value)
 			if value_norm in ("require", "verify-ca", "verify-full"):
-				query["ssl"] = "true"
+				ssl_required = True
 			elif value_norm == "disable":
-				query["ssl"] = "false"
-			# for allow/prefer or unknown, do not set ssl at all
+				ssl_required = False
 		url = url.set(query=query)
-	return str(url)
+	return str(url), ({"ssl": ssl_required} if ssl_required is not None else {})
 
-engine: AsyncEngine = create_async_engine(_normalize_database_url(settings.database_url), pool_size=10, max_overflow=20, pool_pre_ping=True)
+_normalized_url, _connect_args = _normalize_database_url_and_args(settings.database_url)
+
+engine: AsyncEngine = create_async_engine(_normalized_url, pool_size=10, max_overflow=20, pool_pre_ping=True, connect_args=_connect_args)
 
 AsyncSessionFactory = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
 
