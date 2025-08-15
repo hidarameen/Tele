@@ -1,3 +1,4 @@
+from __future__ import annotations
 from sqlalchemy import String, Integer, BigInteger, Boolean, ForeignKey, Text, UniqueConstraint, Index, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
