@@ -17,6 +17,9 @@ def _normalize_database_url_and_args(url_str: str) -> tuple[str, dict]:
 	# First pass: raw strip
 	raw = _strip_sslmode_raw(url_str)
 	url = make_url(raw)
+	# Force asyncpg driver if a sync or bare driver is provided
+	if url.drivername in ("postgresql", "postgres", "postgresql+psycopg2", "postgresql+pg8000"):
+		url = url.set(drivername="postgresql+asyncpg")
 	if url.drivername.startswith("postgresql"):
 		query = dict(url.query)
 		sslmode_raw = query.pop("sslmode", None)
