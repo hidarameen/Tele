@@ -15,6 +15,7 @@ def _normalize_database_url_and_args(url_str: str) -> tuple[str, dict]:
 		url = url.set(drivername="postgresql+asyncpg")
 	if url.drivername.startswith("postgresql"):
 		query = dict(url.query)
+		# read sslmode
 		sslmode_raw = query.get("sslmode")
 		if sslmode_raw is not None:
 			value = str(sslmode_raw).strip().lower()
@@ -29,9 +30,15 @@ def _normalize_database_url_and_args(url_str: str) -> tuple[str, dict]:
 				ssl_required = True
 			elif value_norm == "disable":
 				ssl_required = False
-			# Always drop sslmode so it won't be passed to asyncpg
-			query.pop("sslmode", None)
-		url = url.set(query=query)
+		# honor explicit ssl=true/false if present
+		if "ssl" in query and ssl_required is None:
+			ssl_val = str(query.get("ssl")).strip().lower()
+			if ssl_val in ("1", "true", "on", "yes"):
+				ssl_required = True
+			elif ssl_val in ("0", "false", "off", "no"):
+				ssl_required = False
+		# drop all query params (asyncpg doesn't accept arbitrary URL params)
+		url = url.set(query={})
 	return str(url), ({"ssl": ssl_required} if ssl_required is not None else {})
 
 _normalized_url, _connect_args = _normalize_database_url_and_args(settings.database_url)
