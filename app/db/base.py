@@ -11,11 +11,24 @@ def _normalize_database_url(url_str: str) -> str:
 	if url.drivername.startswith("postgresql"):
 		query = dict(url.query)
 		if "sslmode" in query:
-			value = str(query.get("sslmode", "")).lower()
-			if value not in ("disable", "allow", "prefer", "require", "verify-ca", "verify-full"):
-				# drop unknown sslmode
+			value = str(query.get("sslmode", "")).strip().lower()
+			# map common synonyms
+			synonyms = {
+				"enabled": "require", "enable": "require", "on": "require", "true": "require", "1": "require",
+				"disabled": "disable", "disable": "disable", "off": "disable", "false": "disable", "0": "disable",
+				"verifyfull": "verify-full", "verify_full": "verify-full",
+				"verifyca": "verify-ca", "verify_ca": "verify-ca",
+				"prefer_ssl": "prefer", "allow_ssl": "allow", "require_ssl": "require",
+				"noverify": "require", "no-verify": "require",
+			}
+			value_norm = synonyms.get(value, value)
+			recognized = {"disable", "allow", "prefer", "require", "verify-ca", "verify-full"}
+			if value_norm in recognized:
+				query["sslmode"] = value_norm
+			else:
+				# drop unknown/empty sslmode
 				query.pop("sslmode", None)
-				url = url.set(query=query)
+			url = url.set(query=query)
 		return str(url)
 	return str(url)
 
