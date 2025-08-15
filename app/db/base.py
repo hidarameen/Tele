@@ -15,6 +15,8 @@ def _normalize_database_url_and_args(url_str: str) -> tuple[str, dict]:
 		url = url.set(drivername="postgresql+asyncpg")
 	if url.drivername.startswith("postgresql"):
 		query = dict(url.query)
+		# Remove libpq-only params that asyncpg doesn't accept
+		query.pop("channel_binding", None)
 		sslmode_raw = query.get("sslmode")
 		if sslmode_raw is not None:
 			value = str(sslmode_raw).strip().lower()
