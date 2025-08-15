@@ -9,8 +9,16 @@ class Settings(BaseSettings):
 
 	builder_bot_token: str = Field(default="", alias="BUILDER_BOT_TOKEN")
 
-	database_url: str = Field(..., alias="DATABASE_URL")
+	database_url: str | None = Field(default=None, alias="DATABASE_URL")
 	redis_url: str = Field(..., alias="REDIS_URL")
+
+	# Optional param-based DB config
+	db_host: str | None = Field(default=None, alias="DB_HOST")
+	db_port: int | None = Field(default=None, alias="DB_PORT")
+	db_name: str | None = Field(default=None, alias="DB_NAME")
+	db_user: str | None = Field(default=None, alias="DB_USER")
+	db_password: str | None = Field(default=None, alias="DB_PASSWORD")
+	db_sslmode: str | None = Field(default=None, alias="DB_SSLMODE")  # disable/allow/prefer/require/verify-ca/verify-full
 
 	telethon_api_id: int | None = Field(default=None, alias="TELETHON_API_ID")
 	telethon_api_hash: str | None = Field(default=None, alias="TELETHON_API_HASH")
