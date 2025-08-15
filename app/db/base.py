@@ -2,27 +2,20 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engin
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.engine.url import make_url
 from app.config import settings
-import re
 
 class Base(DeclarativeBase):
 	pass
 
-def _strip_sslmode_raw(url_str: str) -> str:
-	# Aggressively remove any sslmode=... from the raw string to avoid asyncpg parsing it
-	return re.sub(r"([?&])sslmode=[^&]*(&|$)", lambda m: m.group(1) if m.group(2) == "" else m.group(1), url_str)
-
 
 def _normalize_database_url_and_args(url_str: str) -> tuple[str, dict]:
 	ssl_required = None
-	# First pass: raw strip
-	raw = _strip_sslmode_raw(url_str)
-	url = make_url(raw)
+	url = make_url(url_str)
 	# Force asyncpg driver if a sync or bare driver is provided
 	if url.drivername in ("postgresql", "postgres", "postgresql+psycopg2", "postgresql+pg8000"):
 		url = url.set(drivername="postgresql+asyncpg")
 	if url.drivername.startswith("postgresql"):
 		query = dict(url.query)
-		sslmode_raw = query.pop("sslmode", None)
+		sslmode_raw = query.get("sslmode")
 		if sslmode_raw is not None:
 			value = str(sslmode_raw).strip().lower()
 			synonyms = {
@@ -36,6 +29,8 @@ def _normalize_database_url_and_args(url_str: str) -> tuple[str, dict]:
 				ssl_required = True
 			elif value_norm == "disable":
 				ssl_required = False
+			# Always drop sslmode so it won't be passed to asyncpg
+			query.pop("sslmode", None)
 		url = url.set(query=query)
 	return str(url), ({"ssl": ssl_required} if ssl_required is not None else {})
 
