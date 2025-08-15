@@ -1,43 +1,64 @@
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.engine.url import make_url
+from sqlalchemy.engine.url import make_url, URL
 from app.config import settings
 
 class Base(DeclarativeBase):
 	pass
 
 
-def _normalize_database_url_and_args(url_str: str) -> tuple[str, dict]:
+def _build_url_from_params() -> str | None:
+	if not all([settings.db_host, settings.db_name, settings.db_user, settings.db_password]):
+		return None
+	port = settings.db_port or 5432
+	return str(URL.create(
+		drivername="postgresql+asyncpg",
+		host=settings.db_host,
+		port=port,
+		database=settings.db_name,
+		username=settings.db_user,
+		password=settings.db_password,
+	))
+
+
+def _normalize_database_url_and_args(url_str: str | None) -> tuple[str, dict]:
 	ssl_required = None
-	url = make_url(url_str)
+	if not url_str:
+		built = _build_url_from_params()
+		if not built:
+			raise RuntimeError("DATABASE_URL or DB_*-params are required")
+		url = make_url(built)
+	else:
+		url = make_url(url_str)
 	# Force asyncpg driver if a sync or bare driver is provided
 	if url.drivername in ("postgresql", "postgres", "postgresql+psycopg2", "postgresql+pg8000"):
 		url = url.set(drivername="postgresql+asyncpg")
 	if url.drivername.startswith("postgresql"):
 		query = dict(url.query)
-		# read sslmode
-		sslmode_raw = query.get("sslmode")
-		if sslmode_raw is not None:
-			value = str(sslmode_raw).strip().lower()
-			synonyms = {
-				"enabled": "require", "enable": "require", "on": "require", "true": "require", "1": "require",
-				"disabled": "disable", "off": "disable", "false": "disable", "0": "disable",
-				"verifyfull": "verify-full", "verify_full": "verify-full",
-				"verifyca": "verify-ca", "verify_ca": "verify-ca",
-			}
-			value_norm = synonyms.get(value, value)
-			if value_norm in ("require", "verify-ca", "verify-full"):
+		# SSL from DB_SSLMODE param if present
+		if settings.db_sslmode:
+			val = settings.db_sslmode.strip().lower()
+			if val in ("require", "verify-ca", "verify-full"):
 				ssl_required = True
-			elif value_norm == "disable":
+			elif val == "disable":
 				ssl_required = False
-		# honor explicit ssl=true/false if present
-		if "ssl" in query and ssl_required is None:
-			ssl_val = str(query.get("ssl")).strip().lower()
-			if ssl_val in ("1", "true", "on", "yes"):
-				ssl_required = True
-			elif ssl_val in ("0", "false", "off", "no"):
-				ssl_required = False
-		# drop all query params (asyncpg doesn't accept arbitrary URL params)
+		# otherwise read sslmode from url
+		if ssl_required is None:
+			sslmode_raw = query.get("sslmode")
+			if sslmode_raw is not None:
+				value = str(sslmode_raw).strip().lower()
+				synonyms = {
+					"enabled": "require", "enable": "require", "on": "require", "true": "require", "1": "require",
+					"disabled": "disable", "off": "disable", "false": "disable", "0": "disable",
+					"verifyfull": "verify-full", "verify_full": "verify-full",
+					"verifyca": "verify-ca", "verify_ca": "verify-ca",
+				}
+				value_norm = synonyms.get(value, value)
+				if value_norm in ("require", "verify-ca", "verify-full"):
+					ssl_required = True
+				elif value_norm == "disable":
+					ssl_required = False
+		# Drop all query params for asyncpg compatibility
 		url = url.set(query={})
 	return str(url), ({"ssl": ssl_required} if ssl_required is not None else {})
 
