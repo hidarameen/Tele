@@ -49,4 +49,11 @@ app/
   main.py
 ```
 
+## ملاحظات اتصال PostgreSQL (Neon وغيرها)
+- إذا ظهر الخطأ: `asyncpg.exceptions.InternalServerError: password authentication failed for user 'neondb_owner'`:
+  - تأكد أن `DATABASE_URL` صحيح وأن كلمة المرور مُرمّزة URL إن كانت تحتوي رموزاً خاصة.
+  - مع Neon استخدم `sslmode=require` واحفظ `options=project%3D<PROJECT_ID>` ضمن العنوان.
+  - يمكنك بدلاً من `DATABASE_URL` ضبط المتغيرات: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, مع `DB_SSLMODE=require` لتجنب مشاكل ترميز العنوان.
+  - يدعم النظام أيضاً متغيرات `PGHOST/PGPORT/PGDATABASE/PGUSER/PGPASSWORD/PGSSLMODE` القياسية.
+
 سيتم لاحقاً إضافة تفاصيل إعدادات المهمة (لوحة إعدادات المهمة) حسب المواصفات التي ستزودنا بها.
